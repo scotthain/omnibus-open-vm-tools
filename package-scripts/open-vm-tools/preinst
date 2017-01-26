@@ -1,7 +1,7 @@
 #!/bin/sh
 #
-# Perform necessary harmony setup steps
+# Perform necessary open-vm-tools setup steps
 # before package is installed.
 #
 
-echo "You're about to install harmony!"
+echo "You're about to install open-vm-tools!"

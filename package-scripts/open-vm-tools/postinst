@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Perform necessary harmony setup steps
+# Perform necessary open-vm-tools setup steps
 # after package is installed.
 #
 
@@ -12,6 +12,229 @@ error_exit()
   exit 1
 }
 
-echo "Thank you for installing harmony!"
+echo "Creating service"
+
+is_nexus()
+{
+  uname -r | grep "WR7" 2>&1 >/dev/null
+}
+
+is_iosxr()
+{
+  uname -r | grep "^Darwin" 2>&1 >/dev/null
+}
+
+ln -s /opt/open-vm-tools/embedded/bin/vmtoolsd /usr/bin/vmtoolsd || true
+
+# Taken from http://jadedadmin.blogspot.com/2013/08/starting-vmtoolsd-as-service-on-red-hat.html
+# then modified a bit
+cat << 'EOF' > /etc/init.d/vmtoolsd
+#!/bin/bash
+#
+#   vmtoolsd          Start/stop the vmware tools daemon
+#
+# chkconfig:  2345 90 60
+# description: vmtoolsd is a daemon that starts up.  for some reason, it
+#              doesn't include a sysv init startup file in the latest release.
+#              so i have to write this
+#
+
+### BEGIN INIT INFO
+# Provides: vmtoolsd
+# Required-Start: $local_fs $syslog
+# Required-Stop: $local_fs $syslog
+# Default-Start: 2345
+# Default-Stop: 90
+# Short-Description: Run vmware tools daemon
+# Description:  Yadda yadda.
+### END INIT INFO
+
+RETVAL=0
+prog="vmtoolsd"
+exec="/usr/sbin/vmtoolsd"
+lockfile="/var/lock/subsys/vmtoolsd"
+
+# Source function library
+. /etc/init.d/functions
+
+start() {
+    # Ensure no one has access
+    if [ $UID -ne 0 ]; then
+        echo "User has insufficient privileges."
+        exit 4
+    fi
+
+    [ -x $exec ] || exit 5
+
+    echo -n $"Starting $prog: "
+    daemon $prog --background=/var/run/vmtoolsd.pid
+    retval=$?
+    echo
+    [ $retval -eq 0 ] && touch $lockfile
+
+}
+
+stop() {
+    if [ $UID -ne 0 ]; then
+        echo "User has insufficient privileges."
+        exit 4
+    fi
+
+    echo -n $"Stopping $prog: "
+    if [ -n "`pidfileofproc $exec`" ]; then
+        killproc $exec
+        RETVAL=3
+    else
+        failure $"Stopping $prog"
+    fi
+    retval=$?
+    echo
+    [ $retval -eq 0 ] && rm -f $lockfile
+}
+
+restart() {
+    stop
+    start
+}
+
+reload() {
+    echo -n $"Reloading $prog: "
+    if [ -n "`pidfileofproc $exec`" ]; then
+        killproc $exec -HUP
+    else
+        failure $"Reloading $prog"
+    fi
+    retval=$?
+    echo
+}
+
+rh_status() {
+    status -p /var/run/vmtoolsd.pid $prog
+}
+
+rh_status_q() {
+    rh_status >/dev/null 2>&1
+}
+
+# A function to start a program.
+# Stolen from the default init.d/functions library, because
+# ios_xr has a non-standard one
+daemon() {
+        # Test syntax.
+        local gotbase= force= nicelevel corelimit
+        local pid base= user= nice= bg= pid_file=
+        local cgroup=
+        nicelevel=0
+        while [ "$1" != "${1##[-+]}" ]; do
+          case $1 in
+            '')    echo $"$0: Usage: daemon [+/-nicelevel] {program}"
+                   return 1;;
+            --check)
+                   base=$2
+                   gotbase="yes"
+                   shift 2
+                   ;;
+            --check=?*)
+                   base=${1#--check=}
+                   gotbase="yes"
+                   shift
+                   ;;
+            --user)
+                   user=$2
+                   shift 2
+                   ;;
+            --user=?*)
+                   user=${1#--user=}
+                   shift
+                   ;;
+            --pidfile)
+                   pid_file=$2
+                   shift 2
+                   ;;
+            --pidfile=?*)
+                   pid_file=${1#--pidfile=}
+                   shift
+                   ;;
+            --force)
+                   force="force"
+                   shift
+                   ;;
+            [-+][0-9]*)
+                   nice="nice -n $1"
+                   shift
+                   ;;
+            *)     echo $"$0: Usage: daemon [+/-nicelevel] {program}"
+                   return 1;;
+          esac
+        done
+
+        # Save basename.
+        [ -z "$gotbase" ] && base=${1##*/}
+
+        # See if it's already running. Look *only* at the pid file.
+        __pids_var_run "$base" "$pid_file"
+
+        [ -n "$pid" -a -z "$force" ] && return
+
+        # make sure it doesn't core dump anywhere unless requested
+        corelimit="ulimit -S -c ${DAEMON_COREFILE_LIMIT:-0}"
+
+        # if they set NICELEVEL in /etc/sysconfig/foo, honor it
+        [ -n "${NICELEVEL:-}" ] && nice="nice -n $NICELEVEL"
+
+        # if they set CGROUP_DAEMON in /etc/sysconfig/foo, honor it
+        if [ -n "${CGROUP_DAEMON}" ]; then
+                if [ ! -x /bin/cgexec ]; then
+                        echo -n "Cgroups not installed"; warning
+                        echo
+                else
+                        cgroup="/bin/cgexec";
+                        for i in $CGROUP_DAEMON; do
+                                cgroup="$cgroup -g $i";
+                        done
+                fi
+        fi
+
+        # Echo daemon
+        [ "${BOOTUP:-}" = "verbose" -a -z "${LSB:-}" ] && echo -n " $base"
+
+        # And start it up.
+        if [ -z "$user" ]; then
+           $cgroup $nice /bin/bash -c "$corelimit >/dev/null 2>&1 ; $*"
+        else
+           $cgroup $nice runuser -s /bin/bash $user -c "$corelimit >/dev/null 2>&1 ; $*"
+        fi
+
+        [ "$?" -eq 0 ] && success $"$base startup" || failure $"$base startup"
+}
+
+case "$1" in
+    start)
+        rh_status_q && exit 0
+        $1
+        ;;
+    stop)
+        rh_status_q || exit 0
+        $1
+        ;;
+    restart)
+        $1
+        ;;
+    status)
+        rh_status
+        ;;
+    *)
+        echo $"Usage: $0 {start|stop|restart|status}"
+        exit 2
+esac
+exit $?
+
+EOF
+
+chmod +x /etc/init.d/vmtoolsd
+
+chkconfig vmtoolsd on
+
+service vmtoolsd start
 
 exit 0

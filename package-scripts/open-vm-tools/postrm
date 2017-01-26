@@ -1,9 +1,18 @@
 #!/bin/sh
 #
-# Perform necessary harmony removal steps
+# Perform necessary omnibus-open-vm-tools removal steps
 # after package is uninstalled.
 #
 
-echo "harmony has been uninstalled!"
+
+service vmtoolsd stop
+
+chkconfig vmtoolsd off
+
+rm -f /usr/bin/vmtoolsd
+
+rm -f /etc/init.d/vmtoolsd
+
+echo "open-vm-tools has been uninstalled!"
 
 exit 0

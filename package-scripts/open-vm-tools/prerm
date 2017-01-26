@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Perform necessary harmony setup steps
+# Perform necessary open-vm-tools setup steps
 # prior to installing package.
 #
 
