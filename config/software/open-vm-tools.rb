@@ -35,7 +35,7 @@ whitelist_file "libguestInfo.so"
 build do
   env = with_standard_compiler_flags(with_embedded_path)
 
-  command "autoreconf -i", env: env, cwd: "#{project_dir}/open-vm-tools" 
+  command "autoreconf -i", env: env, cwd: "#{project_dir}/open-vm-tools"
   command "./configure --prefix=#{install_dir}/embedded --enable-deploypkg=no --without-ssl --without-x --without-icu --without-kernel-modules", env: env, cwd: "#{project_dir}/open-vm-tools"
 
   make "-j #{workers}", env: env, cwd: "#{project_dir}/open-vm-tools"

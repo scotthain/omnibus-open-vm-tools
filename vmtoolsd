@@ -1,26 +1,5 @@
 #!/bin/sh
 #
-# Perform necessary open-vm-tools setup steps
-# after package is installed.
-#
-
-PROGNAME=`basename $0`
-
-error_exit()
-{
-  echo "${PROGNAME}: ${1:-"Unknown Error"}" 1>&2
-  exit 1
-}
-
-echo "Creating service"
-
-ln -s /opt/open-vm-tools/embedded/bin/vmtoolsd /usr/bin/vmtoolsd || true
-
-# Taken from http://jadedadmin.blogspot.com/2013/08/starting-vmtoolsd-as-service-on-red-hat.html
-# then modified a bit
-cat << 'EOF' > /etc/init.d/vmtoolsd
-#!/bin/sh
-#
 # vmtoolsd - Open VMware Tools Daemon
 #
 # chkconfig:   - 80 20
@@ -205,12 +184,3 @@ case "$1" in
         exit 2
 esac
 exit $?
-EOF
-
-chmod +x /etc/init.d/vmtoolsd
-
-chkconfig vmtoolsd on
-
-service vmtoolsd start
-
-exit 0
